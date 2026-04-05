@@ -1,0 +1,121 @@
+name: CI/CD pipeline for Tomcat (DEV, TEST, PRE-PROD, PROD)
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v3
+
+      - name: set-up jdk
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: validate with maven
+        run: mvn validate
+
+      - name: compile with maven
+        run: mvn compile
+
+      - name: test with maven
+        run: mvn test
+
+      - name: package with maven
+        run: mvn clean package
+
+      - name: verify WAR file
+        run: ls -lh target/
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: war-file
+          path: target/*.war
+
+  # --------------------------------------------------------------------
+  # DEPLOY TO DEV
+  # --------------------------------------------------------------------
+  deploy-dev:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: download war
+        uses: actions/download-artifact@v4
+        with:
+          name: war-file
+
+      - name: Deploy to Tomcat (DEV)
+        run: |
+          WAR=$(ls *.war | head -n 1)
+          echo "Deploying $WAR to DEV"
+          curl -v -u "${{ secrets.TOMCAT_USER_DEV }}:${{ secrets.TOMCAT_PASSWORD_DEV }}" \
+          -T "$WAR" \
+          "http://${{ secrets.TOMCAT_HOST_DEV }}:8080/manager/text/deploy?path=/TrainBook&update=true"
+
+  # --------------------------------------------------------------------
+  # DEPLOY TO TEST
+  # --------------------------------------------------------------------
+  deploy-test:
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: download war
+        uses: actions/download-artifact@v4
+        with:
+          name: war-file
+
+      - name: Deploy to Tomcat (TEST)
+        run: |
+          WAR=$(ls *.war | head -n 1)
+          echo "Deploying $WAR to TEST"
+          curl -v -u "${{ secrets.TOMCAT_USER_TEST }}:${{ secrets.TOMCAT_PASSWORD_TEST }}" \
+          -T "$WAR" \
+          "http://${{ secrets.TOMCAT_HOST_TEST }}:8080/manager/text/deploy?path=/TrainBook&update=true"
+
+  # --------------------------------------------------------------------
+  # DEPLOY TO PRE-PROD
+  # --------------------------------------------------------------------
+  deploy-preprod:
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: download war
+        uses: actions/download-artifact@v4
+        with:
+          name: war-file
+
+      - name: Deploy to Tomcat (PRE-PROD)
+        run: |
+          WAR=$(ls *.war | head -n 1)
+          echo "Deploying $WAR to PRE-PROD"
+          curl -v -u "${{ secrets.TOMCAT_USER_PRE_PROD }}:${{ secrets.TOMCAT_PASSWORD_PRE_PROD }}" \
+          -T "$WAR" \
+          "http://${{ secrets.TOMCAT_HOST_PRE_PROD }}:8080/manager/text/deploy?path=/TrainBook&update=true"
+
+  # --------------------------------------------------------------------
+  # DEPLOY TO PROD
+  # --------------------------------------------------------------------
+  deploy-prod:
+    needs: deploy-preprod
+    runs-on: ubuntu-latest
+    steps:
+      - name: download war
+        uses: actions/download-artifact@v4
+        with:
+          name: war-file
+
+      - name: Deploy to Tomcat (PROD)
+        run: |
+          WAR=$(ls *.war | head -n 1)
+          echo "Deploying $WAR to PROD"
+          curl -v -u "${{ secrets.TOMCAT_USER_PROD }}:${{ secrets.TOMCAT_PASSWORD_PROD }}" \
+          -T "$WAR" \
+          "http://${{ secrets.TOMCAT_HOST_PROD }}:8080/manager/text/deploy?path=/TrainBook&update=true"
