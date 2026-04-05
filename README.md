@@ -1,5 +1,4 @@
 # Automating-Java-Web-App-Deployment-to-Tomcat-with-GitHub-Actions
-# 🚀 Deploy Application to Tomcat using CI/CD Pipeline with GitHub Actions
 
 ---
 
